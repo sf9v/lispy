@@ -29,40 +29,106 @@ void add_history(char *unused) {}
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
-long eval_op(long x, char *op, long y)
+enum lval_t
 {
-    if (strcmp(op, "+") == 0)
-        return x + y;
-    if (strcmp(op, "-") == 0)
-        return x - y;
-    if (strcmp(op, "*") == 0)
-        return x * y;
-    if (strcmp(op, "/") == 0)
-        return x / y;
-    if (strcmp(op, "^") == 0)
-        return pow(x, y);
-    if (strcmp(op, "%%") == 0)
-        return x % y;
-    if (strcmp(op, "min") == 0)
-        return MIN(x, y);
-    if (strcmp(op, "max") == 0)
-        return MAX(x, y);
-    return 0;
+    LVAL_NUM,
+    LVAL_ERR
+};
+
+enum err_t
+{
+    LERR_DIV_ZERO,
+    LERR_BAD_OP,
+    LERR_BAD_NUM
+};
+
+typedef struct lval
+{
+    int type;
+    double num;
+    int err;
+} lval;
+
+lval lval_num(double x)
+{
+    lval v;
+    v.type = LVAL_NUM;
+    v.num = x;
+    return v;
 }
 
-long eval(mpc_ast_t *t)
+lval lval_err(int x)
+{
+    lval v;
+    v.type = LVAL_ERR;
+    v.err = x;
+    return v;
+}
+
+void lval_print(lval v)
+{
+    switch (v.type)
+    {
+    case LVAL_NUM:
+        printf("%f", v.num);
+        break;
+    case LVAL_ERR:
+        if (v.err == LERR_DIV_ZERO)
+            printf("Error: Division By Zero!");
+        if (v.err == LERR_BAD_OP)
+            printf("Error: Invalid Operator!");
+        if (v.err == LERR_BAD_NUM)
+            printf("Error: Invalid Number!");
+        break;
+    }
+}
+
+void lval_println(lval v)
+{
+    lval_print(v);
+    putchar('\n');
+}
+
+lval eval_op(lval x, char *op, lval y)
+{
+
+    if (x.type == LVAL_ERR)
+        return x;
+    if (y.type == LVAL_ERR)
+        return y;
+
+    if (strcmp(op, "+") == 0)
+        return lval_num(x.num + y.num);
+    if (strcmp(op, "-") == 0)
+        return lval_num(x.num - y.num);
+    if (strcmp(op, "*") == 0)
+        return lval_num(x.num * y.num);
+    if (strcmp(op, "/") == 0)
+        return y.num == 0 ? lval_err(LERR_DIV_ZERO) : lval_num(x.num / y.num);
+    if (strcmp(op, "^") == 0)
+        return lval_num(pow(x.num, y.num));
+    if (strcmp(op, "min") == 0)
+        return lval_num(MIN(x.num, y.num));
+    if (strcmp(op, "max") == 0)
+        return lval_num(MAX(x.num, y.num));
+    return lval_err(LERR_BAD_OP);
+}
+
+lval eval(mpc_ast_t *t)
 {
     // a number
     if (strstr(t->tag, "number"))
     {
-        return atoi(t->contents);
+        errno = 0;
+        double x = strtod(t->contents, NULL);
+        return errno != ERANGE ? lval_num(x) : lval_err(LERR_BAD_NUM);
     }
 
     // the operator is always the second child
     char *op = t->children[1]->contents;
 
     // evaluate the third child
-    long x = eval(t->children[2]);
+    lval x = eval(t->children[2]);
 
     // iterate the remaining children and combining
     int i = 3;
@@ -85,7 +151,7 @@ int main(int argc, char **argv)
 
     /* Define them with the following Language */
     mpca_lang(MPCA_LANG_DEFAULT, " \
-    number   : /-?[0-9]+/ ; \
+    number   : /-?[0-9.]+/ ; \
     operator : '+' | '-' | '*' | '/' | '^' | \"min\" | \"max\" ; \
     expr     : <number> | '(' <operator> <expr>+ ')' ; \
     lispy    : /^/ <operator> <expr>+ /$/ ; \
@@ -105,14 +171,12 @@ int main(int argc, char **argv)
         mpc_result_t r;
         if (mpc_parse("<stdin>", input, Lispy, &r))
         {
-            /* On Success Print the AST */
-            mpc_ast_print(r.output);
-            printf("%li\n", eval(r.output));
+            lval result = eval(r.output);
+            lval_println(result);
             mpc_ast_delete(r.output);
         }
         else
         {
-            /* Otherwise Print the Error */
             mpc_err_print(r.error);
             mpc_err_delete(r.error);
         }
