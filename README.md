@@ -1,2 +1,3 @@
 # lispy
-Build your own Lisp project
+
+[Build your own Lisp](http://www.buildyourownlisp.com/) project

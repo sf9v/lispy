@@ -1,43 +1,4 @@
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-#include "mpc.h"
-
-#ifdef _WIN32
-#include <string.h>
-static char buffer[2048];
-
-/* Fake readline function */
-char *readline(char *prompt) {
-  fputs(prompt, stdout);
-  fgets(buffer, 2048, stdin);
-  char *cpy = malloc(strlen(buffer) + 1);
-  strcpy(cpy, buffer);
-  cpy[strlen(cpy) - 1] = '\0';
-  return cpy;
-}
-
-/* Fake add_history function */
-void add_history(char *unused) {}
-
-#else
-#include <editline/readline.h>
-#endif
-
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-
-enum lval_t { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_SEXPR };
-
-typedef struct lval {
-  enum lval_t type;
-  double num;
-  char *err;
-  char *sym;
-  int count;
-  struct lval **cell;
-} lval;
+#include "lispy.h"
 
 lval *lval_num(double x) {
   lval *v = malloc(sizeof(lval));
@@ -148,27 +109,6 @@ lval *lval_read(mpc_ast_t *t) {
   return e;
 }
 
-lval *lval_eval(lval *v);
-lval *builtin_op(lval *a, char *op);
-void lval_println(lval *v);
-
-void lval_debug(lval *v) {
-  switch (v->type) {
-  case LVAL_NUM:
-    printf("LVAL_NUM: %.2f\n", v->num);
-    break;
-  case LVAL_ERR:
-    printf("LVAL_ERR: %s\n", v->err);
-    break;
-  case LVAL_SYM:
-    printf("LVAL_SYM: %s\n", v->sym);
-    break;
-  case LVAL_SEXPR:
-    printf("LVAL_EXPR: 0\n");
-    break;
-  }
-}
-
 lval *lval_eval_sexpr(lval *v) {
   for (int i = 0; i < v->count; ++i)
     v->cell[i] = lval_eval(v->cell[i]);
@@ -255,8 +195,22 @@ lval *builtin_op(lval *a, char *op) {
   return x;
 }
 
-// forward declare lval_print
-void lval_print(lval *v);
+void lval_debug(lval *v) {
+  switch (v->type) {
+  case LVAL_NUM:
+    printf("LVAL_NUM: %.2f\n", v->num);
+    break;
+  case LVAL_ERR:
+    printf("LVAL_ERR: %s\n", v->err);
+    break;
+  case LVAL_SYM:
+    printf("LVAL_SYM: %s\n", v->sym);
+    break;
+  case LVAL_SEXPR:
+    printf("LVAL_EXPR: 0\n");
+    break;
+  }
+}
 
 void lval_expr_print(lval *v, char open, char close) {
   putchar(open);
