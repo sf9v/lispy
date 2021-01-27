@@ -183,6 +183,8 @@ lval *builtin(lval *a, char *sym) {
     return builtin_join(a);
   if (strcmp("eval", sym) == 0)
     return builtin_eval(a);
+  if (strcmp("cons", sym) == 0)
+    return builtin_cons(a);
   if (strstr("+-/*", sym))
     return builtin_op(a, sym);
   lval_del(a);
@@ -289,6 +291,25 @@ lval *builtin_join(lval *a) {
   return e;
 }
 
+lval *builtin_cons(lval *a) {
+  // first arg must be a number
+  // second arg must be a q-expression
+  LASSERT(a, a->count == 2, "cons: too few arguments");
+  LASSERT(a, a->cell[0]->type == LVAL_NUM, "cons: x argument must be a value");
+  LASSERT(a, a->cell[1]->type == LVAL_QEXPR,
+          "cons: y argument must be a q-expression");
+
+  lval *x = lval_pop(a, 0);
+  lval *y = lval_pop(a, 0);
+  lval *e = lval_add(lval_qexpr(), x);
+  while (y->count > 0) {
+    e = lval_add(e, lval_pop(y, 0));
+  }
+
+  lval_del(a);
+  return e;
+}
+
 void lval_expr_print(lval *v, char open, char close) {
   putchar(open);
   for (int i = 0; i < v->count; ++i) {
@@ -357,7 +378,7 @@ int main(void) {
   const char *language = "\
     number  : /-?[0-9]+/ ; \
     symbol  : \"list\" | \"head\" | \"tail\" \
-            | \"join\" | \"eval\" \
+            | \"join\" | \"eval\" | \"cons\" \
             | '+' | '-' | '*' | '/' ; \
     sexpr   : '(' <expr>* ')' ; \
     qexpr   : '{' <expr>* '}' ; \
