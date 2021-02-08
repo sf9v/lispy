@@ -36,6 +36,23 @@ void add_history(char* unused) {}
     return err;                               \
   }
 
+#define LASSERT_TYPE(func, args, index, expect)              \
+  LASSERT(args, args->cell[index]->type == expect,           \
+          "Function '%s': invalid argument type on %i. "     \
+          "Got %s, Expected %s.",                            \
+          func, index, lval_t_name(args->cell[index]->type), \
+          lval_t_name(expect))
+
+#define LASSERT_NUM(func, args, num)                       \
+  LASSERT(args, args->count == num,                        \
+          "Function '%s': incorrect number of arguments. " \
+          "Got %i, Expected %i.",                          \
+          func, args->count, num)
+
+#define LASSERT_NOT_EMPTY(func, args, index)   \
+  LASSERT(args, args->cell[index]->count != 0, \
+          "Function '%s': passed {} for argument %i.", func, index);
+
 struct lval;
 typedef struct lval lval;
 
@@ -56,6 +73,7 @@ char* lval_t_name(lval_t t);
 typedef lval* (*lbuiltin)(lenv*, lval*);
 
 typedef struct lenv {
+  lenv* par;
   int count;
   char** syms;
   lval** vals;
@@ -64,11 +82,18 @@ typedef struct lenv {
 typedef struct lval {
   lval_t type;
 
+  // basic
   double num;
   char* err;
   char* sym;
-  lbuiltin fun;
 
+  // function
+  lbuiltin builtin;
+  lenv* env;
+  lval* formals;
+  lval* body;
+
+  // expression
   int count;
   lval** cell;
 } lval;
@@ -79,6 +104,7 @@ lval* lval_sym(char* s);
 lval* lval_sexpr(void);
 lval* lval_qexpr(void);
 lval* lval_fun(lbuiltin fun);
+lval* lval_lambda(lval* formals, lval* body);
 lval* lval_err(char* fmt, ...);
 
 // lval destructor
@@ -98,7 +124,9 @@ void lenv_del(lenv* e);
 
 // lenv manupilations
 lval* lenv_get(lenv* e, lval* k);
+lenv* lenv_copy(lenv* e);
 void lenv_put(lenv* e, lval* k, lval* v);
+void lenv_def(lenv* e, lval* k, lval* v);
 
 // ast to lval
 lval* lval_read_num(mpc_ast_t* t);
@@ -107,10 +135,12 @@ lval* lval_read(mpc_ast_t* t);
 // evaluators
 lval* lval_eval_sexpr(lenv* e, lval* v);
 lval* lval_eval(lenv* e, lval* v);
+lval* lval_call(lenv* e, lval* f, lval* a);
 
 // builtin functions
 void lenv_add_builtin(lenv* e, char* name, lbuiltin fun);
 lval* builtin_op(lenv* e, lval* a, char* op);
+lval* builtin_var(lenv* e, lval* a, char* func);
 
 lval* builtin_add(lenv* e, lval* a);
 lval* builtin_sub(lenv* e, lval* a);
@@ -123,8 +153,9 @@ lval* builtin_list(lenv* e, lval* a);
 lval* builtin_eval(lenv* e, lval* a);
 lval* builtin_join(lenv* e, lval* a);
 lval* builtin_cons(lenv* e, lval* a);
-
 lval* builtin_def(lenv* e, lval* a);
+lval* builtin_lambda(lenv* e, lval* a);
+lval* builtin_put(lenv* e, lval* a);
 
 // outputs
 void lval_expr_print(lval* v, char open, char close);
